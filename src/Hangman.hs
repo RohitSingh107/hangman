@@ -9,11 +9,11 @@ import System.Random (randomRIO)
 -- type WordList = [String]
 newtype WordList = WordList [String] deriving (Eq, Show)
 
-data Puzzle = Puzzle String [Maybe Char] [Char]
+data Puzzle = Puzzle String [Maybe Char] [Char] Int
 
 instance Show Puzzle where
-    show (Puzzle _ discovered guessed) =
-      (intersperse ' ' $ fmap renderPuzzleChar discovered) ++ " Guessed so far: " ++ guessed
+    show (Puzzle _ discovered guessed al) =
+      (intersperse ' ' $ fmap renderPuzzleChar discovered) ++ " Guessed so far: " ++ guessed ++ " Attempts Left: " ++ (show al)
 
 
 allWords :: IO WordList
@@ -48,20 +48,20 @@ randomWord' :: IO String
 randomWord' = gameWords >>= randomWord
 
 freshPuzzle :: String -> Puzzle
-freshPuzzle puzzleWord = Puzzle puzzleWord (fmap (const Nothing) puzzleWord) []
+freshPuzzle puzzleWord = Puzzle puzzleWord (fmap (const Nothing) puzzleWord) [] incorrectGuess
 
 charInWord :: Puzzle -> Char -> Bool
-charInWord (Puzzle puzzleWord _ _) c = c `elem` puzzleWord
+charInWord (Puzzle puzzleWord _ _ _) c = c `elem` puzzleWord
 
 alreadyGuessed :: Puzzle -> Char -> Bool
-alreadyGuessed (Puzzle _ _ guessedWord) c = c `elem` guessedWord
+alreadyGuessed (Puzzle _ _ guessedWord _) c = c `elem` guessedWord
 
 renderPuzzleChar :: Maybe Char -> Char
 renderPuzzleChar Nothing = '_'
 renderPuzzleChar (Just c) = c
 
-fillInCharacter :: Puzzle -> Char -> Puzzle
-fillInCharacter (Puzzle word filledInSoFar s) c = Puzzle word newFilledInSoFar (c:s)
+fillInCharacter :: Puzzle -> Char -> Int -> Puzzle
+fillInCharacter (Puzzle word filledInSoFar s al) c  a = Puzzle word newFilledInSoFar (c:s) (al - a)
   where zipper guessed wordChar guessChar = if wordChar == guessed then Just wordChar else guessChar
         newFilledInSoFar                  = zipWith (zipper c) word filledInSoFar
         
@@ -81,15 +81,15 @@ handleGuess puzzle guess = do
       putStrLn "This character was in the\
                \ word, filling in the word\
                \ accordingly"
-      return (fillInCharacter puzzle guess)
+      return (fillInCharacter puzzle guess 0)
 
     (False, _) -> do
       putStrLn "This character wasn't in\
                 \ the word, try again."
-      return (fillInCharacter puzzle guess)
+      return (fillInCharacter puzzle guess 1)
        
 gameOver :: Puzzle -> IO ()
-gameOver (Puzzle wordToGuess ag guessed) =
+gameOver (Puzzle wordToGuess ag guessed _) =
   if (length guessed) > (incorrectGuess + (length $ filter isJust ag)) then
     do putStrLn "You Lose!"
        putStrLn $ "The word was: " ++ wordToGuess
@@ -97,7 +97,7 @@ gameOver (Puzzle wordToGuess ag guessed) =
   else return () 
 
 gameWin :: Puzzle -> IO ()
-gameWin (Puzzle puzzleWord filledInSoFar _) = 
+gameWin (Puzzle puzzleWord filledInSoFar _ _) = 
   if all isJust filledInSoFar then
     do putStrLn $ "\n\nYou win! \nYou sucessfully guessed the word was " ++ puzzleWord
        exitSuccess
